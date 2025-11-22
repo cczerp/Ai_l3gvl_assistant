@@ -1,0 +1,57 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Configuration
+pyyaml==6.0.1
+
+# Cloud model APIs
+openai==1.3.0
+anthropic==0.7.0
+
+# Local model inference
+torch==2.1.0
+transformers==4.35.0
+accelerate==0.24.0
+bitsandbytes==0.41.0
+
+# RAG and embeddings
+sentence-transformers==2.2.2
+faiss-cpu==1.7.4
+chromadb==0.4.18
+
+# Vector databases (optional)
+pinecone-client==2.2.4
+weaviate-client==3.25.0
+
+# Text processing
+numpy==1.24.3
+pandas==2.1.3
+spacy==3.7.2
+
+# Legal data processing
+lxml==4.9.3
+beautifulsoup4==4.12.2
+
+# Citation parsing
+regex==2023.10.3
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# Logging and monitoring
+python-json-logger==2.0.7
+loguru==0.7.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# Development
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
