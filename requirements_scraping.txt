@@ -1,0 +1,47 @@
+# Legal Data Scraping System Requirements
+# Install with: pip install -r requirements_scraping.txt
+
+# Core HTTP client (async)
+httpx>=0.25.0
+
+# HTML/XML parsing
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Retry logic and error handling
+tenacity>=8.2.0
+
+# Progress bars
+tqdm>=4.66.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Async support (usually included in Python 3.7+)
+# asyncio is part of standard library
+
+# Database (if uploading to Supabase)
+supabase>=2.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# JSON handling (standard library, but good to note)
+# json
+
+# Date handling (standard library)
+# datetime
+
+# Optional: For generating embeddings later
+# openai>=1.0.0  # Uncomment if using OpenAI embeddings
+# sentence-transformers>=2.2.0  # Uncomment if using local embeddings
+
+# Optional: For advanced features
+# numpy>=1.24.0  # For vector operations
+# pandas>=2.0.0  # For data analysis
+# sqlalchemy>=2.0.0  # For advanced database operations
+
+# Development dependencies (optional)
+# pytest>=7.4.0  # For testing
+# black>=23.0.0  # For code formatting
+# ruff>=0.1.0  # For linting
