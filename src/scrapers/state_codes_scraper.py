@@ -8,6 +8,8 @@ import logging
 
 from .base_scraper import BaseScraper, ScraperConfig
 from .justia_scraper import JustiaScraper
+from .michigan_scraper import MichiganLegislatureScraper
+from .wisconsin_scraper import WisconsinLegislatureScraper
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +26,8 @@ class StateCodesScraperFactory:
     # Map of state codes to specialized scraper classes
     # Add state-specific scrapers here as they're developed
     SPECIALIZED_SCRAPERS = {
-        # Example: 'CA': CaliforniaOfficialScraper,
-        # Example: 'NY': NewYorkOfficialScraper,
+        'MI': MichiganLegislatureScraper,
+        'WI': WisconsinLegislatureScraper,
     }
 
     # Default scraper for states without specialized scrapers
