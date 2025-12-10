@@ -24,7 +24,7 @@ anthropic==0.7.0  # Claude integration
 # ========================================
 # FREE AI ALTERNATIVES (HUGGINGFACE INFERENCE API)
 # ========================================
-huggingface-hub==0.19.4  # HuggingFace model hub (FREE tier available)
+huggingface-hub==0.17.3  # HuggingFace model hub (FREE tier available, compatible with tokenizers)
 requests==2.31.0  # For API calls
 
 # ========================================
