@@ -6,6 +6,36 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "vector";  -- For pgvector (semantic search)
 
 -- ============================================
+-- CONSTITUTIONAL DOCUMENTS TABLE
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS constitutional_documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_type VARCHAR(100) NOT NULL, -- 'constitution', 'amendment', 'bill_of_rights'
+    article_number VARCHAR(50),
+    section_number VARCHAR(50),
+    amendment_number INTEGER,
+    title TEXT NOT NULL,
+    full_text TEXT NOT NULL,
+    ratified_date DATE,
+    jurisdiction VARCHAR(50) DEFAULT 'federal',
+    source_url TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    embedding VECTOR(1536)
+);
+
+-- Indexes for constitutional_documents
+CREATE INDEX IF NOT EXISTS idx_constitutional_docs_type ON constitutional_documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_constitutional_docs_amendment ON constitutional_documents(amendment_number);
+CREATE INDEX IF NOT EXISTS idx_constitutional_docs_article ON constitutional_documents(article_number);
+CREATE INDEX IF NOT EXISTS idx_constitutional_docs_full_text ON constitutional_documents USING GIN(to_tsvector('english', full_text));
+CREATE INDEX IF NOT EXISTS idx_constitutional_docs_embedding ON constitutional_documents
+    USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+
+-- ============================================
 -- STATE LAWS TABLE
 -- ============================================
 
@@ -180,6 +210,11 @@ CREATE TRIGGER update_legal_terms_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_constitutional_docs_updated_at
+    BEFORE UPDATE ON constitutional_documents
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
 -- HELPER FUNCTIONS
 -- ============================================
@@ -325,12 +360,14 @@ ORDER BY statute_count DESC;
 -- COMMENTS (Documentation)
 -- ============================================
 
+COMMENT ON TABLE constitutional_documents IS 'US Constitution, Bill of Rights, and all amendments';
 COMMENT ON TABLE state_laws IS 'State-level statutes and codes from all 50 US states';
 COMMENT ON TABLE federal_laws IS 'Federal statutes, USC, and CFR regulations';
 COMMENT ON TABLE cases IS 'Legal case opinions and precedents';
 COMMENT ON TABLE legal_terms IS 'Legal dictionary and terminology database';
 COMMENT ON TABLE precedent_relationships IS 'Citation graph showing relationships between cases';
 
+COMMENT ON COLUMN constitutional_documents.embedding IS 'Vector embedding for semantic search (1536 dimensions for OpenAI ada-002)';
 COMMENT ON COLUMN state_laws.embedding IS 'Vector embedding for semantic search (1536 dimensions for OpenAI ada-002)';
 COMMENT ON COLUMN state_laws.metadata IS 'Additional structured metadata in JSON format';
 
@@ -351,10 +388,11 @@ COMMENT ON COLUMN state_laws.metadata IS 'Additional structured metadata in JSON
 DO $$
 BEGIN
     RAISE NOTICE '✅ Legal AI Database Schema Created Successfully!';
-    RAISE NOTICE 'Tables created: state_laws, federal_laws, cases, legal_terms, precedent_relationships';
+    RAISE NOTICE 'Tables created: constitutional_documents, state_laws, federal_laws, cases, legal_terms, precedent_relationships';
     RAISE NOTICE 'Extensions enabled: uuid-ossp, vector (pgvector)';
     RAISE NOTICE 'Next steps:';
     RAISE NOTICE '  1. Configure your .env file with SUPABASE_URL and SUPABASE_KEY';
-    RAISE NOTICE '  2. Run the scraper: python scripts/scrape_laws.py --state CA --test';
-    RAISE NOTICE '  3. Upload scraped data to Supabase';
+    RAISE NOTICE '  2. Get CourtListener API key: https://www.courtlistener.com/sign-in/register/';
+    RAISE NOTICE '  3. Run the scraper: python scripts/scrape_all_legal_data.py --all';
+    RAISE NOTICE '  4. Upload scraped data to Supabase';
 END $$;
