@@ -30,8 +30,13 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any
 
+from dotenv import load_dotenv
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Load environment variables so USER_AGENT & friends are available
+load_dotenv()
 
 from src.scrapers import JustiaScraper, StateCodesScraperFactory, ScraperConfig
 from src.scrapers.base_scraper import US_STATES
