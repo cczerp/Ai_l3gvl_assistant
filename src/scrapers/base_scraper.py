@@ -3,6 +3,7 @@ Base scraper class with common functionality for all legal data scrapers.
 """
 
 import asyncio
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -23,6 +24,22 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 
+def _default_user_agent() -> str:
+    """
+    Resolve the user agent string for outbound HTTP requests.
+
+    Prefer the USER_AGENT environment variable (populated via .env) so users
+    can tweak scraper identity without code changes, but fall back to a
+    mainstream Chromium signature to reduce the chance of being blocked.
+    """
+    return os.environ.get(
+        "USER_AGENT",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/121.0.0.0 Safari/537.36"
+    )
+
+
 @dataclass
 class ScraperConfig:
     """Configuration for scrapers."""
@@ -30,14 +47,47 @@ class ScraperConfig:
     timeout: int = 30
     rate_limit_delay: float = 1.0  # seconds between requests
     max_concurrent_requests: int = 5
-    user_agent: str = "LegalAI-Research-Bot/1.0 (Educational/Research Purpose)"
+    user_agent: str = field(default_factory=_default_user_agent)
     cache_dir: Optional[Path] = None
     respect_robots_txt: bool = True
+    default_headers: Dict[str, str] = field(default_factory=dict)
+    enable_playwright: bool = False
+    playwright_storage_state: Optional[Path] = None
 
     def __post_init__(self):
         if self.cache_dir:
             self.cache_dir = Path(self.cache_dir)
             self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Allow overriding via environment variables
+        env_timeout = os.environ.get("REQUEST_TIMEOUT")
+        if env_timeout:
+            try:
+                self.timeout = int(env_timeout)
+            except ValueError:
+                logger.warning("Invalid REQUEST_TIMEOUT=%s; using default", env_timeout)
+
+        env_retries = os.environ.get("MAX_RETRIES")
+        if env_retries:
+            try:
+                self.max_retries = int(env_retries)
+            except ValueError:
+                logger.warning("Invalid MAX_RETRIES=%s; using default", env_retries)
+
+        env_delay = os.environ.get("SCRAPING_DELAY")
+        if env_delay:
+            try:
+                self.rate_limit_delay = float(env_delay)
+            except ValueError:
+                logger.warning("Invalid SCRAPING_DELAY=%s; using default", env_delay)
+
+        env_playwright = os.environ.get("ENABLE_PLAYWRIGHT")
+        if env_playwright:
+            self.enable_playwright = env_playwright.strip().lower() in {"1", "true", "yes"}
+
+        env_storage = os.environ.get("PLAYWRIGHT_STORAGE_STATE")
+        if env_storage:
+            self.playwright_storage_state = Path(env_storage).expanduser()
 
 
 @dataclass
@@ -89,6 +139,9 @@ class BaseScraper(ABC):
         """
         self.config = config or ScraperConfig()
         self.session: Optional[httpx.AsyncClient] = None
+        self._playwright = None
+        self._playwright_browser = None
+        self._playwright_context = None
         self.request_times: List[float] = []
         self.stats = {
             "requests_made": 0,
@@ -110,10 +163,33 @@ class BaseScraper(ABC):
     async def start_session(self):
         """Start HTTP session."""
         if self.session is None:
+            headers = {
+                "User-Agent": self.config.user_agent,
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                    "image/avif,image/webp,image/apng,*/*;q=0.8"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Sec-Ch-Ua": '"Not.A/Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-User": "?1",
+                "Sec-Fetch-Dest": "document",
+            }
+            headers.update(self.config.default_headers)
+
             self.session = httpx.AsyncClient(
                 timeout=self.config.timeout,
-                headers={"User-Agent": self.config.user_agent},
-                follow_redirects=True
+                headers=headers,
+                follow_redirects=True,
+                http2=True
             )
             self.stats["start_time"] = datetime.now()
             logger.info(f"Started scraper session: {self.__class__.__name__}")
@@ -126,6 +202,7 @@ class BaseScraper(ABC):
             self.stats["end_time"] = datetime.now()
             logger.info(f"Closed scraper session: {self.__class__.__name__}")
             self._log_stats()
+        await self._close_playwright()
 
     def _log_stats(self):
         """Log scraping statistics."""
@@ -188,6 +265,24 @@ class BaseScraper(ABC):
 
             return response.text
 
+        except httpx.HTTPStatusError as e:
+            self.stats["requests_failed"] += 1
+            status = e.response.status_code if e.response is not None else None
+            logger.error(f"Failed to fetch {url}: HTTP {status} - {e}")
+
+            if (
+                self.config.enable_playwright
+                and status in {403, 429, 503}
+            ):
+                logger.warning(
+                    "Falling back to Playwright for %s due to HTTP %s",
+                    url,
+                    status
+                )
+                return await self._fetch_with_playwright(url)
+
+            raise
+
         except Exception as e:
             self.stats["requests_failed"] += 1
             logger.error(f"Failed to fetch {url}: {str(e)}")
@@ -220,6 +315,86 @@ class BaseScraper(ABC):
             BeautifulSoup object
         """
         return BeautifulSoup(html, 'lxml')
+
+    async def _ensure_playwright(self):
+        """Start a Playwright browser context if enabled."""
+        if self._playwright_context or not self.config.enable_playwright:
+            return
+
+        try:
+            from playwright.async_api import async_playwright  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "Playwright support requested but playwright is not installed. "
+                "Install it with `pip install playwright` and execute `playwright install`."
+            ) from exc
+
+        self._playwright = await async_playwright().start()
+        self._playwright_browser = await self._playwright.chromium.launch(headless=True)
+        storage_state = None
+        if self.playwright_storage_state:
+            storage_path = self.playwright_storage_state
+            if storage_path.exists():
+                storage_state = str(storage_path)
+            else:
+                logger.warning("Playwright storage state not found at %s", storage_path)
+
+        self._playwright_context = await self._playwright_browser.new_context(
+            user_agent=self.config.user_agent,
+            viewport={"width": 1366, "height": 768},
+            locale="en-US",
+            storage_state=storage_state,
+        )
+        logger.info("Playwright context initialized")
+
+    async def _close_playwright(self):
+        """Clean up Playwright resources."""
+        if self._playwright_context:
+            await self._playwright_context.close()
+            self._playwright_context = None
+        if self._playwright_browser:
+            await self._playwright_browser.close()
+            self._playwright_browser = None
+        if self._playwright:
+            await self._playwright.stop()
+            self._playwright = None
+
+    async def _fetch_with_playwright(self, url: str) -> str:
+        """Fetch a page using Playwright when HTTP requests are blocked."""
+        await self._ensure_playwright()
+
+        page = await self._playwright_context.new_page()
+        try:
+            await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=self.config.timeout * 1000,
+            )
+            try:
+                await page.wait_for_load_state("networkidle", timeout=self.config.timeout * 1000)
+            except Exception:
+                # ignore if network idle never fires
+                pass
+
+            # Cloudflare / CDN challenge page detection
+            page_title = await page.title()
+            if "Just a moment" in page_title:
+                logger.debug("Detected challenge page, waiting for completion...")
+                await page.wait_for_timeout(6000)
+                try:
+                    await page.wait_for_load_state("load", timeout=5000)
+                except Exception:
+                    pass
+
+            content = await page.content()
+            self.stats["requests_made"] += 1
+
+            if self.config.cache_dir:
+                self._cache_page(url, content)
+
+            return content
+        finally:
+            await page.close()
 
     @abstractmethod
     async def scrape_state(self, state_code: str) -> List[ScrapedStatute]:
