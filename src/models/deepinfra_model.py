@@ -40,9 +40,10 @@ class DeepInfraModel(BaseModel):
             api_key: DeepInfra API key (defaults to DEEPINFRA_API_KEY env var)
             model_name: Model to use
         """
-        api_key = api_key or os.getenv('DEEPINFRA_API_KEY')
+        # Support both DEEPINFRA_API and DEEPINFRA_API_KEY
+        api_key = api_key or os.getenv('DEEPINFRA_API') or os.getenv('DEEPINFRA_API_KEY')
         if not api_key:
-            raise ValueError("DeepInfra API key required")
+            raise ValueError("DeepInfra API key required (set DEEPINFRA_API or DEEPINFRA_API_KEY)")
 
         super().__init__(api_key, model_name)
 
