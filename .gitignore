@@ -46,8 +46,8 @@ data/embeddings/*
 data/vector_store/*
 !data/**/.gitkeep
 
-# Model files
-models/
+# Model files (downloaded weights, not source code)
+/models/
 *.bin
 *.safetensors
 *.gguf
