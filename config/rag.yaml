@@ -1,0 +1,76 @@
+# RAG Configuration for Legal Data
+
+embeddings:
+  model: "text-embedding-ada-002"  # or "sentence-transformers/all-MiniLM-L6-v2" for local
+  dimension: 1536
+  batch_size: 100
+  provider: "openai"  # Options: openai, local, huggingface
+
+vector_store:
+  type: "faiss"  # Options: faiss, pinecone, weaviate, chromadb
+  index_type: "IVF"
+  nlist: 100
+  nprobe: 10
+  storage_path: "data/vector_store"
+  
+  # Alternative: Pinecone configuration
+  pinecone:
+    enabled: false
+    environment: "us-west1-gcp"
+    index_name: "legal-ai-index"
+    api_key_env: "PINECONE_API_KEY"
+
+retrieval:
+  top_k: 5
+  similarity_threshold: 0.7
+  reranking_enabled: true
+  reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  
+  # Context window management
+  max_context_tokens: 8000
+  chunk_overlap: 100
+
+data_sources:
+  state_laws:
+    enabled: true
+    path: "data/state_laws"
+    update_frequency: "weekly"
+    chunk_size: 1000
+    metadata_fields:
+      - state
+      - statute_number
+      - effective_date
+      - jurisdiction
+  
+  federal_laws:
+    enabled: true
+    path: "data/federal_laws"
+    update_frequency: "weekly"
+    chunk_size: 1000
+    metadata_fields:
+      - usc_title
+      - section
+      - effective_date
+      - agency
+  
+  cases:
+    enabled: true
+    path: "data/cases"
+    years_coverage: 50
+    chunk_size: 1500
+    metadata_fields:
+      - case_name
+      - citation
+      - court
+      - date_decided
+      - jurisdiction
+      - judges
+  
+  legal_dictionaries:
+    enabled: true
+    path: "data/legal_dictionaries"
+    chunk_size: 500
+    metadata_fields:
+      - term
+      - source
+      - jurisdiction

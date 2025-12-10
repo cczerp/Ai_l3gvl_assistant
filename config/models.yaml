@@ -1,0 +1,53 @@
+# Model Configuration for Hybrid Legal-AI System
+
+cloud_models:
+  openai:
+    enabled: true
+    model_name: "gpt-4"
+    api_key_env: "OPENAI_API_KEY"
+    max_tokens: 4096
+    temperature: 0.3
+    use_cases:
+      - complex_reasoning
+      - legal_analysis
+      - contract_review
+  
+  anthropic:
+    enabled: true
+    model_name: "claude-3-opus-20240229"
+    api_key_env: "ANTHROPIC_API_KEY"
+    max_tokens: 4096
+    temperature: 0.3
+    use_cases:
+      - legal_research
+      - case_analysis
+      - document_drafting
+
+local_models:
+  llama3:
+    enabled: true
+    model_path: "models/llama3-8b-instruct"
+    quantization: "4bit"
+    max_tokens: 2048
+    temperature: 0.3
+    use_cases:
+      - quick_queries
+      - citation_extraction
+      - text_classification
+  
+  mixtral:
+    enabled: true
+    model_path: "models/mixtral-8x7b-instruct"
+    quantization: "4bit"
+    max_tokens: 2048
+    temperature: 0.3
+    use_cases:
+      - legal_summarization
+      - precedent_matching
+      - entity_extraction
+
+# Model selection strategy
+router:
+  default_strategy: "cost_optimized"  # Options: cost_optimized, performance, hybrid
+  fallback_enabled: true
+  timeout_seconds: 30
